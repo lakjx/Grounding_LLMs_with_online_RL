@@ -174,7 +174,7 @@ class PPOUpdater(BaseUpdater):
         if "load_embedding" in kwargs or "load_fine_tuned_version" in kwargs or "save_first_last" in kwargs:
             # If asked, only do embedding weights loading
             if "load_embedding" in kwargs and kwargs["load_embedding"] and not hasattr(self, "is_embedding_loaded"):
-                pretrained_weights = torch.load(kwargs["llm_path"] + "/pytorch_model.bin")
+                pretrained_weights = torch.load(kwargs["llm_path"] + "/pytorch_model.bin",weights_only=True)
                 state_dict = OrderedDict({
                     k: v for k, v in pretrained_weights.items() if "embed" in k or "shared" in k
                     # Warning: this may fail if the model shares other things than embedding weights
@@ -190,19 +190,19 @@ class PPOUpdater(BaseUpdater):
                     and not hasattr(self, "is_loaded"):
                 try:
                     self._llm_module.load_state_dict(torch.load(kwargs["saving_path_model"] +
-                                                                "/" + kwargs["id_expe"] + "/last/model.checkpoint"))
+                                                                "/" + kwargs["id_expe"] + "/last/model.checkpoint",weights_only=True))
                     self.optimizer = torch.optim.Adam(self._llm_module.parameters())
                     self.optimizer.load_state_dict(torch.load(
-                        kwargs["saving_path_model"] + "/" + kwargs["id_expe"] + "/last/optimizer.checkpoint"))
+                        kwargs["saving_path_model"] + "/" + kwargs["id_expe"] + "/last/optimizer.checkpoint",weights_only=True))
                     self.is_loaded = True
                 except:
                     # The last save has been corrupted for whatever reasons, possibly the program has been forced
                     # to close during the saving => we use the backup
                     self._llm_module.load_state_dict(torch.load(kwargs["saving_path_model"] +
-                                                                "/" + kwargs["id_expe"] + "/backup/model.checkpoint"))
+                                                                "/" + kwargs["id_expe"] + "/backup/model.checkpoint",weights_only=True))
                     self.optimizer = torch.optim.Adam(self._llm_module.parameters())
                     self.optimizer.load_state_dict(torch.load(
-                        kwargs["saving_path_model"] + "/" + kwargs["id_expe"] + "/backup/optimizer.checkpoint"))
+                        kwargs["saving_path_model"] + "/" + kwargs["id_expe"] + "/backup/optimizer.checkpoint",weights_only=True))
                     self.is_loaded = True
 
                     dest = kwargs["saving_path_model"] + "/" + kwargs["id_expe"] + "/last"
@@ -370,7 +370,7 @@ def run_agent(args, algo, id_expe):
 
 
 # This will be overriden by lamorel's launcher if used
-@hydra.main(config_path='config', config_name='config')
+@hydra.main(config_path='config', config_name='config',version_base="1.1")
 def main(config_args):
     # lm server
     if config_args.lamorel_args.distributed_setup_args.n_llm_processes > 0:
@@ -450,8 +450,8 @@ def main(config_args):
 
         else:
             # in the case the model is not pretrained if necessary loads embedding
-            os.makedirs(os.path.join(model_path, 'last'))
-            os.makedirs(os.path.join(model_path, 'backup'))
+            os.makedirs(os.path.join(model_path, 'last'), exist_ok=True)
+            os.makedirs(os.path.join(model_path, 'backup'),exist_ok=True)
             if not config_args.lamorel_args.llm_args.pretrained and config_args.rl_script_args.load_embedding:
                 lm_server.update([None for _ in range(config_args.lamorel_args.distributed_setup_args.n_llm_processes)],
                                  [[None] for _ in range(config_args.lamorel_args.distributed_setup_args.n_llm_processes)],

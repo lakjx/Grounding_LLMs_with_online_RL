@@ -11,6 +11,6 @@ setup(
         'termcolor',
         'matplotlib',
         'ipython',
-        'numpy==1.23.1'
+        'numpy>=1.23.5,<2.3'
     ]
 )

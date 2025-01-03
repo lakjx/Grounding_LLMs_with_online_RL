@@ -10,3 +10,5 @@ notebooks/*
 .DS_Store
 *.pyc
 .hydra/*
+*.plk
+*.checkpoint

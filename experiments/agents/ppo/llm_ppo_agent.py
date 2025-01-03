@@ -101,6 +101,9 @@ class LLMPPOAgent(BasePPOAgent):
             values = torch.stack([_o["value"][0] for _o in output])
             
             action = dist.sample()
+                # 检查并确保正确的维度
+            if action.dim() == 0:
+                action = action.unsqueeze(0)  # 添加批次维度
             a = action.cpu().numpy()
 
             for j in range(self.num_procs):

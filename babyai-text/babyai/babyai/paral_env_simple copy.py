@@ -99,8 +99,7 @@ class ParallelEnv(gym.Env):
         self.spec_id = f"ParallelShapedEnv<{self.spec.id}>"
         self.env_name = self.envs[0].unwrapped.spec.id
         self.action_space = self.envs[0].action_space
-        # self.env_name = self.envs[0].env_name
-        # self.spec_id = f"ParallelShapedEnv<{self.env_name}>"
+
         if "BabyAI" in self.env_name:
             self.envs_per_proc = 64
         elif "BabyPANDA" in self.env_name:
