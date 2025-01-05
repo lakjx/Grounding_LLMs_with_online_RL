@@ -17,7 +17,7 @@ WANDB_INIT=false
 CONFIG_PATH="/home/trx/workplace/Grounding_LLMs_with_online_RL/lamorel/examples/PPO_finetuning/"
 CONFIG_NAME="local_gpu_config"
 RL_SCRIPT_PATH="/home/trx/workplace/Grounding_LLMs_with_online_RL/lamorel/examples/PPO_finetuning/mac_main.py"
-LOADING_PATH="/home/trx/workplace/Grounding_LLMs_with_online_RL/lamorel/outputs/epochs_250-300"
+LOADING_PATH="/home/trx/workplace/trx/output/epochs_750-800"
 UE_NUM=5
 SEED=1113
 # 执行 Python 脚本
