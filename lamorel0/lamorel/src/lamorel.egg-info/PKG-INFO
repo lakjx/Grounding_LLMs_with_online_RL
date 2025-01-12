@@ -1,0 +1,10 @@
+Metadata-Version: 2.1
+Name: lamorel
+Version: 0.2
+Author: Clément Romac (Hugging Face & Inria)
+Requires-Dist: transformers>=4.35
+Requires-Dist: accelerate>=0.24.1
+Requires-Dist: hydra-core
+Requires-Dist: torch>=2.1.0
+Provides-Extra: quantization
+Requires-Dist: bitsandbytes>=0.41.1; extra == "quantization"
