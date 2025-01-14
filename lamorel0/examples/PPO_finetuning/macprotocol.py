@@ -62,16 +62,19 @@ class MultiDiscrete(gym.Space):
         return np.array_equal(self.low, other.low) and np.array_equal(self.high, other.high)
 
 class MacProtocolEnv():
-    def __init__(self, args, discrete_action=True):
-        self.args = args
-        self.env_name = args.env_name
+    def __init__(self, ue_num, discrete_action=True):
+        # self.args = args
+        self.env_name = 'MacPro_Env'
         self.is_training = True
-        self.rho = self.args.rho
-        self.UE_num = self.args.UE_num
-        self.p_SDU_arrival = self.args.p_SDU_arrival
-        self.tbl_error_rate = self.args.tbl_error_rate
-        self.TTLs = self.args.TTLs  # Max. duration of episode
-        self.recent_k = self.args.recent_k
+        self.rho = 1.5
+        self.UE_num = ue_num
+        self.p_SDU_arrival = 0.5
+        self.tbl_error_rate = 1e-3
+        self.TTLs = 24
+        self.UE_txbuff_len = 20
+        self.recent_k = 0
+        self.need_comm = True
+
         self.collision_count = 0
         self.gen_data_count = 0
         self.UE_act_space = DotDic({
@@ -80,7 +83,7 @@ class MacProtocolEnv():
             'Delete': 2
         })
         # UE_obs \in [0,|B|]
-        self.UE_obs_space = spaces.Discrete(self.args.UE_txbuff_len + 1)
+        self.UE_obs_space = spaces.Discrete(self.UE_txbuff_len + 1)
         # BS_obs \in [0,|U|+1]
         self.BS_obs_space = spaces.Discrete(self.UE_num + 2)
 
@@ -114,7 +117,7 @@ class MacProtocolEnv():
             # elif agent == 'BS' and self.args.need_comm == False:
             #     total_action_space.append(spaces.Discrete(2))
             #communication action
-            if self.args.need_comm:
+            if self.need_comm:
                 if agent != 'BS':
                     c_action_space = spaces.Discrete(len(self.UE_msg_space))
                     total_action_space.append(c_action_space)
@@ -135,10 +138,10 @@ class MacProtocolEnv():
                 self.action_space.append([])
             # observation space
             if agent != 'BS':
-                obs_dim = 4*(self.recent_k+1) if self.args.need_comm else 2*(self.recent_k+1)
+                obs_dim = 4*(self.recent_k+1) if self.need_comm else 2*(self.recent_k+1)
                 self.observation_space.append(spaces.Discrete(obs_dim))
             else:
-                obs_dim = self.recent_k+1 + self.UE_num*2*(self.recent_k+1) if self.args.need_comm else self.recent_k+1
+                obs_dim = self.recent_k+1 + self.UE_num*2*(self.recent_k+1) if self.need_comm else self.recent_k+1
                 self.observation_space.append(spaces.Discrete(obs_dim))
             share_obs_dim += obs_dim
         self.share_observation_space = [spaces.Discrete(share_obs_dim)] * self.num_agents
@@ -150,7 +153,7 @@ class MacProtocolEnv():
         self.collision_count = 0
         self.gen_data_count = 0
 
-        self.UEs = [UE(i,self.args) for i in range(self.UE_num)]
+        self.UEs = [UE(i,self.UE_txbuff_len) for i in range(self.UE_num)]
 
         # # self.UE_SDU_Generate()
         self.UE_obs = np.zeros((self.UE_num,), dtype=np.int32)
@@ -197,7 +200,8 @@ class MacProtocolEnv():
         # UE_actions = [act[0] for (i, act) in enumerate(action_n) if self.agents[i] != 'BS']
         # UCM = [act[1] for (i, act) in enumerate(action_n) if self.agents[i] != 'BS'] if self.args.need_comm else None
         # DCM = self.BS_msg_total_space[action_n[-1][0]] if self.args.need_comm else None
-        UE_actions = action_n
+        # UE_actions = action_n
+        UE_actions , UCM, DCM = action_n[0], action_n[1], action_n[2]
         #测试状态下，打印每个UE的buffer状态
         if not self.is_training:
             for UE in self.UEs:
@@ -265,6 +269,9 @@ class MacProtocolEnv():
             # reward_n.append(self.get_rwd())
             # done_n.append(self.done)
         info_n["num_UE"] = self.UE_num
+        info_n["goodput"] = self.get_Goodput()
+        info_n["colli_num"] = self.get_collision_rate()
+        info_n["arri_num"] = self.get_packet_arrival_rate()
         return obs_n, self.get_rwd(), self.done, info_n
     def UE_Prompt(self,idx,observ):
         act_mapping = {0:'nothing',1:'transmit',2:'delete'}
@@ -334,7 +341,7 @@ class MacProtocolEnv():
             n = [self.trajact_UE_msg[i][tar_ue_idx] for i in range(self.recent_k + 1)]
             m = [self.trajact_BS_msg[i][tar_ue_idx] for i in range(self.recent_k + 1)]
 
-        if self.args.need_comm:
+        if self.need_comm:
             return np.concatenate((o, a, n, m), axis=0).flatten()
         else:
             return np.concatenate((o, a), axis=0).flatten()
@@ -353,7 +360,7 @@ class MacProtocolEnv():
             self.trajact_BS_msg = [self.trajact_BS_msg[0]] * gap + self.trajact_BS_msg
             self.trajact_UE_msg = [self.trajact_UE_msg[0]] * gap + self.trajact_UE_msg
 
-        if self.args.need_comm:
+        if self.need_comm:
             return np.concatenate((self.trajact_BS_obs, self.trajact_UE_msg, self.trajact_BS_msg), axis=1).flatten()
         else:
             return np.array(self.trajact_BS_obs).flatten()
@@ -413,15 +420,13 @@ class MacProtocolEnv():
             self.UE_msg = UCM
     
     def get_Goodput(self):
-        if self.step_count == 0:
-            raise ValueError('step_count is 0!')
-        return len(self.sdus_received)/self.step_count
+        return len(self.sdus_received)
     def get_collision_rate(self):
-        return self.collision_count / self.step_count
+        return self.collision_count 
     def get_buffer_occupancy(self):
         return [UE.get_obs()/UE.buff_size for UE in self.UEs]
     def get_packet_arrival_rate(self):
-        return len(self.sdus_received)/self.gen_data_count
+        return len(self.sdus_received)
     def seed(self, seed=None):
         if seed is None:
             np.random.seed(1)
@@ -429,10 +434,10 @@ class MacProtocolEnv():
             np.random.seed(seed)
 
 class UE():
-    def __init__(self, name_id , args):
+    def __init__(self, name_id , UE_txbuff_len):
         self.name_id = name_id
         self.name = 'UE' + str(name_id)
-        self.buff_size = args.UE_txbuff_len
+        self.buff_size = UE_txbuff_len
         self.buff = []
         self.datacount = 0
         self.SG = False

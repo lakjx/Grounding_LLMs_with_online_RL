@@ -22,7 +22,7 @@ from operator import add
 from transformers import set_seed
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 
-from babyai_text_env import BabyAITextEnv
+from babyai_text_env import UDTSEnv
 from macprotocol import MacProtocolEnv
 from lamorel import Caller, lamorel_init
 from lamorel import BaseUpdater, BaseModuleFunction, BaseModelInitializer
@@ -361,8 +361,8 @@ def main(config_args):
     set_seed(seed)
 
     # Instantiate environment
-    # envs = BabyAITextEnv(config_args.rl_script_args)
-    envs = MacProtocolEnv(config_args.macEnv_args)
+    envs = UDTSEnv(config_args.rl_script_args)
+    # envs = MacProtocolEnv(config_args.macEnv_args)
 
     # Create LLM agent
     lm_server = Caller(config_args.lamorel_args,
@@ -392,23 +392,22 @@ def main(config_args):
         wandb.init(
             project=config_args.rl_script_args.wandb_project,
             name=config_args.rl_script_args.wandb_name,
-            config={**config_args.rl_script_args, **config_args.macEnv_args}
+            config={**config_args.rl_script_args}
             )
 
     # Set up experience buffer
     buffers = [
-        PPOBuffer(config_args.rl_script_args.steps_per_epoch // config_args.rl_script_args.number_envs, config_args.macEnv_args.UE_num,
+        PPOBuffer(config_args.rl_script_args.steps_per_epoch // config_args.rl_script_args.number_envs, config_args.rl_script_args.ue_num[ii],
                   config_args.rl_script_args.gamma, config_args.rl_script_args.lam)
-        for _ in range(config_args.rl_script_args.number_envs)
+        for ii in range(config_args.rl_script_args.number_envs)
     ]
 
     # Prepare for interaction with environment
     (o, infos), ep_ret, ep_len = envs.reset(), \
         [0 for _ in range(config_args.rl_script_args.number_envs)], \
         [0 for _ in range(config_args.rl_script_args.number_envs)]
-    envs.is_training = False if config_args.rl_script_args.test else True
-    history = reset_history()
-    # history["goal"].extend([_i["goal"] for _i in infos])
+
+    # history = reset_history()
 
     Action_candidates= ['nothing', 'transmit', 'delete']
     ue_signal_candidate = ['null', 'schedule_request']
@@ -421,81 +420,83 @@ def main(config_args):
         __time = time.time()
         for t in tqdm(range(config_args.rl_script_args.steps_per_epoch // config_args.rl_script_args.number_envs),
                       ascii=" " * 9 + ">", ncols=100):
-            possible_actions,prompts= [],[]
-            possible_actions_a,prompts_a = [],[]
-            for _i in range(infos["num_UE"]+1):
-                if _i < infos["num_UE"]:
-                    prompts_a.append(infos[f"UE{_i}_des"]) 
-                    possible_actions_a.append([" ".join([x,y]) for x in Action_candidates for y in ue_signal_candidate ])
-                else:
-                    prompts_a.extend(infos["BS_des"])
-                    possible_actions_a.extend([z for z in bs_signal_candidate]for _ in range(infos["num_UE"]))
+            possible_actions,prompts,env_act,values,log_probs,actions_id = [],[],[],[],[],[]
+            for info_a in infos:
+                possible_actions_a,prompts_a = [],[]
+                for _i in range(info_a["num_UE"]+1):
+                    if _i < info_a["num_UE"]:
+                        prompts_a.append(info_a[f"UE{_i}_des"]) 
+                        possible_actions_a.append([" ".join([x,y]) for x in Action_candidates for y in ue_signal_candidate ])
+                    else:
+                        prompts_a.extend(info_a["BS_des"])
+                        possible_actions_a.extend([z for z in bs_signal_candidate]for _ in range(info_a["num_UE"]))
 
-            output = lm_server.custom_module_fns(['score', 'value'],
-                                                 contexts=prompts_a,
-                                                 candidates=possible_actions_a)
-            scores = scores_stacking([_o['score'] for _o in output])
-            proba_dist = torch.distributions.Categorical(logits=scores)
-            # values = torch.stack([_o["value"][0] for _o in output])
-            values = (sum([_o["value"][0] for _o in output])/(infos["num_UE"]*2))
-            sampled_actions = proba_dist.sample()
-            # log_probs = proba_dist.log_prob(sampled_actions)
-            log_probs = torch.mean(proba_dist.log_prob(sampled_actions)).unsqueeze(0)
-            actions_id = sampled_actions.cpu().numpy()
-            UE_action,uplink_message,downlink_message = [],[],[]
-            for j in range(len(actions_id)):
-                if j < infos["num_UE"]:
-                    command = possible_actions_a[j][int(actions_id[j])].split(' ')
-                    UE_action.append(Action_candidates.index(command[0]))
-                    uplink_message.append(ue_signal_candidate.index(command[-1]))
-                else:
-                    downlink_message.append(int(actions_id[j]))
+                output = lm_server.custom_module_fns(['score', 'value'],
+                                                    contexts=prompts_a,
+                                                    candidates=possible_actions_a)
+                scores = scores_stacking([_o['score'] for _o in output])
+                proba_dist = torch.distributions.Categorical(logits=scores)
+                # values = torch.stack([_o["value"][0] for _o in output])
+                value_a = (sum([_o["value"][0] for _o in output])/(info_a["num_UE"]*2))
+                sampled_actions = proba_dist.sample()
+                # log_probs = proba_dist.log_prob(sampled_actions)
+                log_probs_a = torch.mean(proba_dist.log_prob(sampled_actions)).unsqueeze(0)
+                actions_id_a = sampled_actions.cpu().numpy()
+                UE_action,uplink_message,downlink_message = [],[],[]
+                for j in range(len(actions_id_a)):
+                    if j < info_a["num_UE"]:
+                        command = possible_actions_a[j][int(actions_id_a[j])].split(' ')
+                        UE_action.append(Action_candidates.index(command[0]))
+                        uplink_message.append(ue_signal_candidate.index(command[-1]))
+                    else:
+                        downlink_message.append(int(actions_id_a[j]))
+                values.append(value_a)
+                log_probs.append(log_probs_a)
+                actions_id.append(actions_id_a)
+                env_act.append([UE_action,uplink_message,downlink_message])
+                possible_actions.append(possible_actions_a)
+                prompts.append(prompts_a)
 
-            possible_actions.append(possible_actions_a)
-            prompts.append(prompts_a)
-
-            o, r, d, infos = envs.step(action_n=UE_action,UCM=uplink_message,DCM=downlink_message)
+            o, rew, d, infos = envs.step(env_act)
             epoch_ended = (t+1)*config_args.rl_script_args.number_envs == config_args.rl_script_args.steps_per_epoch
             bootstrap_dict = {
                 "ids": [],
                 "contexts": []
             }
             for i in range(config_args.rl_script_args.number_envs):
-                buffers[i].store(prompts[i], possible_actions[i], actions_id, r, values[i], log_probs[i])
-                ep_ret[i] += r
+                buffers[i].store(prompts[i], possible_actions[i], actions_id[i], rew[i], values[i], log_probs[i])
+                ep_ret[i] += rew[i]
                 ep_len[i] += 1
                 timeout = ep_len[i] == config_args.rl_script_args.max_ep_len
-                terminal = d or timeout
+                terminal = d[i] or timeout
                 if terminal or epoch_ended:
                     if not terminal:
                         bootstrap_dict["ids"].append(i)
                         # bootstrap_dict["contexts"].append(generate_prompt(o[i], infos[i]))
-                        bootstrap_dict["contexts"].append(infos)
+                        bootstrap_dict["contexts"].append(infos[i])
                     else:
                         buffers[i].finish_path(0)
-                        history["ep_len"].append(ep_len[i])
-                        history["ep_ret"].append(ep_ret[i])
                         ep_len[i], ep_ret[i] = 0, 0
                     (o, infos) = envs.reset()  
 
             if len(bootstrap_dict["ids"]) > 0:
                 # print('Warning: trajectory cut off by epoch at %d steps.' % ep_len, flush=True)
                 # if trajectory didn't reach terminal state, bootstrap value target
-                prompts_a = []
-                infos = bootstrap_dict["contexts"].pop()
-                for _i in range(infos["num_UE"]+1):
-                    if _i < infos["num_UE"]:
-                        prompts_a.append(infos[f"UE{_i}_des"]) 
-                    else:
-                        prompts_a.extend(infos["BS_des"])
-                output = lm_server.custom_module_fns(
-                    module_function_keys=['value'],
-                    contexts=prompts_a,
-                    candidates=[[""] for _ in range(len(prompts_a))]
-                )
-                for _i in range(config_args.rl_script_args.number_envs):
-                    val = (sum([_o["value"][0] for _o in output])/(infos["num_UE"]*2))
-                    buffers[bootstrap_dict["ids"][_i]].finish_path(val)
+                
+                for _id,info_a in zip(bootstrap_dict["ids"],bootstrap_dict["contexts"]):
+                    prompts_a = []
+                    for _i in range(info_a["num_UE"]+1):
+                        if _i < info_a["num_UE"]:
+                            prompts_a.append(info_a[f"UE{_i}_des"]) 
+                        else:
+                            prompts_a.extend(info_a["BS_des"])
+                    output = lm_server.custom_module_fns(
+                        module_function_keys=['value'],
+                        contexts=prompts_a,
+                        candidates=[[""] for _ in range(len(prompts_a))]
+                    )
+                    val_a = (sum([_o["value"][0] for _o in output])/(info_a["num_UE"]*2))
+                    buffers[_id].finish_path(val_a)
 
         # Perform PPO update!
         print(f"PPO update number {epoch + 1}")
@@ -504,13 +505,14 @@ def main(config_args):
         if is_test_model:
             rwd,test_goput,colls,ariv = test_Env(config_args, lm_server)
             if config_args.rl_script_args.wandb_init:
-                wandb_eval = {
-                    "eval_Reward": rwd,
-                    "eval_Goodput": test_goput,
-                    "eval_CollisionRate": colls,
-                    "eval_ArrivalRate": ariv
-                }
-                wandb.log(wandb_eval)
+                for env_id in range(config_args.rl_script_args.number_envs):
+                    wandb.log({
+                        f"test_Reward/env{env_id}": rwd[env_id],
+                        f"test_Goodput/env{env_id}": test_goput[env_id],
+                        f"test_CollisionRate/env{env_id}": colls[env_id],
+                        f"test_ArrivalRate/env{env_id}": ariv[env_id]
+                    })
+
         save_model_and_history = (epoch % config_args.rl_script_args.save_freq == 0 or
                                   epoch == config_args.rl_script_args.epochs - 1) and epoch != 0
         start_epoch = epoch - config_args.rl_script_args.save_freq
@@ -521,88 +523,80 @@ def main(config_args):
             if config_args.rl_script_args.loading_path is not None else ""
         # Stack trajectories for all envs
         # TODO: Randomize and mix up environments' trajectories
-        trajectories = [buf.get() for buf in buffers]
-        collected_trajectories = {
+        # trajectories = [buf.get() for buf in buffers]
+        # collected_trajectories = {
+        #     k: torch.cat([traj[k] for traj in trajectories]) if isinstance(trajectories[0][k], torch.Tensor)
+        #     else list(f.reduce(add, [traj[k] for traj in trajectories]))
+        #     for k, _ in trajectories[0].items()
+        # }
+        for env_id, buf in enumerate(buffers):
+            trajectories = [buf.get()]
+            collected_trajectories = {
             k: torch.cat([traj[k] for traj in trajectories]) if isinstance(trajectories[0][k], torch.Tensor)
             else list(f.reduce(add, [traj[k] for traj in trajectories]))
             for k, _ in trajectories[0].items()
-        }
+            }
 
-        update_results = lm_server.update(collected_trajectories['obs'],
-                                          collected_trajectories['possible_act'],
-                                          actions=collected_trajectories['act'],
-                                          returns=collected_trajectories['ret'],
-                                          advantages=collected_trajectories['adv'],
-                                          logprobs=collected_trajectories['logp'],
-                                          values=collected_trajectories['val'],
-                                          lr=config_args.rl_script_args.lr,
-                                          clip_eps=config_args.rl_script_args.clip_eps,
-                                          entropy_coef=config_args.rl_script_args.entropy_coef,
-                                          value_loss_coef=config_args.rl_script_args.value_loss_coef,
-                                          max_grad_norm=config_args.rl_script_args.max_grad_norm,
-                                          ppo_epochs=config_args.rl_script_args.ppo_epochs,
-                                          save_after_update=save_model_and_history,
-                                          output_dir=saving_path,
-                                          loading_path=loading_path,
-                                          num_UE = config_args.macEnv_args.UE_num
-                                          )
+            update_results = lm_server.update(collected_trajectories['obs'],
+                                            collected_trajectories['possible_act'],
+                                            actions=collected_trajectories['act'],
+                                            returns=collected_trajectories['ret'],
+                                            advantages=collected_trajectories['adv'],
+                                            logprobs=collected_trajectories['logp'],
+                                            values=collected_trajectories['val'],
+                                            lr=config_args.rl_script_args.lr,
+                                            clip_eps=config_args.rl_script_args.clip_eps,
+                                            entropy_coef=config_args.rl_script_args.entropy_coef,
+                                            value_loss_coef=config_args.rl_script_args.value_loss_coef,
+                                            max_grad_norm=config_args.rl_script_args.max_grad_norm,
+                                            ppo_epochs=config_args.rl_script_args.ppo_epochs,
+                                            save_after_update=save_model_and_history,
+                                            output_dir=saving_path,
+                                            loading_path=loading_path,
+                                            num_UE = config_args.rl_script_args.ue_num[env_id],
+                                            )
 
-        avg_loss = np.mean([_r['loss'] for _r in update_results])
-        avg_policy_loss = np.mean([_r['policy_loss'] for _r in update_results])
-        avg_value_loss = np.mean([_r['value_loss'] for _r in update_results])
-        history["loss"].append(avg_loss)
-        history["policy_loss"].append(avg_policy_loss)
-        history["value_loss"].append(avg_value_loss)
-        history["possible_actions"].extend(collected_trajectories['possible_act'])
-        history["actions"].extend([
-            [_poss_act[_ii][int(_a[_ii].item())] for _ii in range(2*config_args.macEnv_args.UE_num)] for _poss_act, _a in
-            zip(collected_trajectories['possible_act'], collected_trajectories['act'])])
-        history["prompts"].extend(collected_trajectories['obs'])
-        print(f"Update loss: {avg_loss}")
+            avg_loss = np.mean([_r['loss'] for _r in update_results])
+            avg_policy_loss = np.mean([_r['policy_loss'] for _r in update_results])
+            avg_value_loss = np.mean([_r['value_loss'] for _r in update_results])
+            print(f"Update loss for env {env_id}: {avg_loss}")
 
-        if config_args.rl_script_args.wandb_init:
-            wandb.log({
-                "train_policy_loss": avg_policy_loss,
-                "train_value_loss": avg_value_loss
-                })
-        if save_model_and_history:
-            # Save history
-            with open(f"{saving_path}/history.pkl", "wb") as file:
-                pickle.dump(history, file)
-            history = reset_history()
+            if config_args.rl_script_args.wandb_init:
+                wandb.log({
+                    f"train_policy_loss/env{env_id}": avg_policy_loss,
+                    f"train_value_loss/env{env_id}": avg_value_loss,
+                    })
 
-    start_epoch = epoch - config_args.rl_script_args.save_freq
-    saving_path = f"{config_args.rl_script_args.output_dir}/epochs_{start_epoch}-{epoch}"
-    os.makedirs(saving_path, exist_ok=True)
-    with open(f"{saving_path}/history.pkl", "wb") as file:
-        pickle.dump(history, file)
 
 def test_Env(config_args,llm_md = None):
-    seed = config_args.macEnv_test_args.seed
+    seed = config_args.rl_script_args_test.seed
     torch.manual_seed(seed)
     np.random.seed(seed)
 
     # Create environment
-    envs = MacProtocolEnv(config_args.macEnv_test_args)
-    envs.is_training = False
+    envs = UDTSEnv(config_args.rl_script_args_test)
 
     # 初始化测试历史记录
     test_history = {
+    f"env{i}": {
         "ep_ret": [],  # 每个 episode 的累积奖励
         "ep_len": [],  # 每个 episode 的长度
-        "Goodput": [],
-        "Collision_rate": [],
-        "Arrive_rate": []
+        "goodput": [],  # 每个 episode 的平均吞吐量
+        "colli_num": [],  # 每个 episode 的平均碰撞率
+        "arri_num": []  # 每个 episode 的平均到达率
     }
+    for i in range(config_args.rl_script_args_test.number_envs)
+}
 
     # 准备与环境交互
-    (o, infos), ep_ret, ep_len = envs.reset(), 0, 0
+    (o, infos), ep_ret, ep_len = envs.reset(), \
+        [0 for _ in range(config_args.rl_script_args_test.number_envs)], \
+        [0 for _ in range(config_args.rl_script_args_test.number_envs)]
     Action_candidates = ['nothing', 'transmit', 'delete']
     ue_signal_candidate = ['null', 'schedule_request']
     bs_signal_candidate = ['null', 'schedule_grant', 'acknowledge']
     # ue_signal_candidate = ['Msg_#0', 'Msg_#1', 'Msg_#2', 'Msg_#3']
     # bs_signal_candidate = ['Msg_#0', 'Msg_#1', 'Msg_#2', 'Msg_#3', 'Msg_#4', 'Msg_#5']
-    # config_args.macEnv_test_args.loading_path = None
     if llm_md is not None:
         lm_server = llm_md
     else:
@@ -617,56 +611,64 @@ def test_Env(config_args,llm_md = None):
                         'value': ValueHeadModuleFn(config_args.lamorel_args.llm_args.model_type,
                                                     config_args.lamorel_args.llm_args.pre_encode_inputs)
                     })
-    for _ in tqdm(range(config_args.macEnv_test_args.test_num), ascii=" " * 9 + ">", ncols=100, desc="Test"):
+    for _ in tqdm(range(config_args.rl_script_args_test.test_num), ascii=" " * 9 + ">", ncols=100, desc="Test"):
         while True:
-            # 生成可能的动作和提示
-            possible_actions, prompts = [], []
-            for _i in range(infos["num_UE"] + 1):
-                if _i < infos["num_UE"]:
-                    prompts.append(infos[f"UE{_i}_des"])
-                    possible_actions.append([" ".join([x, y]) for x in Action_candidates for y in ue_signal_candidate])
-                else:
-                    prompts.extend(infos["BS_des"])
-                    possible_actions.extend([z for z in bs_signal_candidate] for _ in range(infos["num_UE"]))
+            possible_actions_all,prompts_all,env_act,actions_id_all = [],[],[],[]
+            for info_a in infos:
+                possible_actions, prompts = [], []
+                for _i in range(info_a["num_UE"] + 1):
+                    if _i < info_a["num_UE"]:
+                        prompts.append(info_a[f"UE{_i}_des"])
+                        possible_actions.append([" ".join([x, y]) for x in Action_candidates for y in ue_signal_candidate])
+                    else:
+                        prompts.extend(info_a["BS_des"])
+                        possible_actions.extend([z for z in bs_signal_candidate] for _ in range(info_a["num_UE"]))
 
-            # 获取模型的输出
-            output = lm_server.custom_module_fns(['score'],
-                                                contexts=prompts,
-                                                candidates=possible_actions)
-            scores = scores_stacking([_o['score'] for _o in output])
-            sampled_actions = torch.argmax(scores, dim=-1)  # 选择得分最高的动作
-            # sampled_actions = torch.distributions.Categorical(logits=scores).sample()
-            actions_id = sampled_actions.cpu().numpy()
+                # 获取模型的输出
+                output = lm_server.custom_module_fns(['score'],
+                                                    contexts=prompts,
+                                                    candidates=possible_actions)
+                scores = scores_stacking([_o['score'] for _o in output])
+                sampled_actions = torch.argmax(scores, dim=-1)  # 选择得分最高的动作
+                # sampled_actions = torch.distributions.Categorical(logits=scores).sample()
+                actions_id = sampled_actions.cpu().numpy()
 
-            # 执行动作
-            UE_action, UCM, DCM = [], [], []
-            for j in range(len(actions_id)):
-                if j < infos["num_UE"]:
-                    command = possible_actions[j][int(actions_id[j])].split(' ')
-                    UE_action.append(Action_candidates.index(command[0]))
-                    UCM.append(ue_signal_candidate.index(command[-1]))
-                else:
-                    DCM.append(int(actions_id[j]))
+                # 执行动作
+                UE_action, uplink_message, downlink_message = [], [], []
+                for j in range(len(actions_id)):
+                    if j < info_a["num_UE"]:
+                        command = possible_actions[j][int(actions_id[j])].split(' ')
+                        UE_action.append(Action_candidates.index(command[0]))
+                        uplink_message.append(ue_signal_candidate.index(command[-1]))
+                    else:
+                        downlink_message.append(int(actions_id[j]))
+                env_act.append([UE_action,uplink_message,downlink_message])
+            
+            o, r, d, infos = envs.step(env_act)
 
-            o, r, d, infos = envs.step(action_n=UE_action, UCM=UCM, DCM=DCM)
-
-            # 更新 episode 的累积奖励和长度
-            ep_ret += r
-            ep_len += 1
+            for i in range(config_args.rl_script_args.number_envs):
+                # 更新 episode 的累积奖励和长度
+                ep_ret[i] += r[i]
+                ep_len[i] += 1
 
             # 如果 episode 结束，记录结果并重置环境
-            if d or ep_len == config_args.rl_script_args.max_ep_len:
-                test_history["ep_ret"].append(ep_ret)
-                test_history["ep_len"].append(ep_len)
-                test_history["Goodput"].append(envs.get_Goodput())
-                test_history["Collision_rate"].append(envs.get_collision_rate())
-                test_history["Arrive_rate"].append(envs.get_packet_arrival_rate())
-                (o, infos), ep_ret, ep_len = envs.reset(), 0, 0
-                break
-    avg_ep_ret = np.mean(test_history["ep_ret"])
-    avg_Goodput = np.mean(test_history["Goodput"])
-    avg_Collisions = np.mean(test_history["Collision_rate"])
-    avg_Arrive_rate = np.mean(test_history["Arrive_rate"])
+            if ep_len[0] == 24 or d[0]:
+                for i in range(config_args.rl_script_args.number_envs):
+                    test_history[f"env{i}"]["ep_ret"].append(ep_ret[i])
+                    test_history[f"env{i}"]["ep_len"].append(ep_len[i])
+                    test_history[f"env{i}"]["goodput"].append(infos[i]["goodput"])
+                    test_history[f"env{i}"]["colli_num"].append(infos[i]["colli_num"])
+                    test_history[f"env{i}"]["arri_num"].append(infos[i]["arri_num"])
+                (o, infos), ep_ret, ep_len = envs.reset(), \
+                    [0 for _ in range(config_args.rl_script_args_test.number_envs)], \
+                    [0 for _ in range(config_args.rl_script_args_test.number_envs)]
+    
+    # 计算测试结果
+    avg_ep_ret = [np.mean(test_history[f"env{i}"]["ep_ret"]) for i in range(config_args.rl_script_args_test.number_envs)]
+    avg_Goodput = [np.mean(test_history[f"env{i}"]["goodput"])/24 for i in range(config_args.rl_script_args_test.number_envs)]
+    avg_Collisions = [np.mean(test_history[f"env{i}"]["colli_num"])/24 for i in range(config_args.rl_script_args_test.number_envs)]
+    avg_Arrive_rate = [np.mean(test_history[f"env{i}"]["arri_num"])/24 for i in range(config_args.rl_script_args_test.number_envs)]
+    
     print(f"Average episode return: {avg_ep_ret}")
     print(f"Average Goodput: {avg_Goodput}")
     print(f"Average Collisions: {avg_Collisions}")

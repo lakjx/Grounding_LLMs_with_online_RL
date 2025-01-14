@@ -13,9 +13,9 @@ lamorel_args:
   llm_args:
     model_type: seq2seq
     # model_type: causal
-    model_path: /home/trx/workplace/trx/t5-small
+    # model_path: /home/trx/workplace/trx/t5-small
     # model_path: /home/trx/workplace/trx/t5-large/Wojtek/flan-t5-large
-    # model_path: /home/trx/workplace/trx/t5-base/zimuwangnlp/flan-t5-base
+    model_path: /home/trx/workplace/trx/t5-base/zimuwangnlp/flan-t5-base
     # model_path: /home/trx/workplace/trx/t5-xl/yiqunchen/flan-t5-xl
     # model_path: /home/trx/workplace/trx/gpt2
     # model_path: /home/trx/workplace/trx/Llama-3.2-1B
@@ -45,49 +45,74 @@ rl_script_args:
   gradient_batch_size: 1
   gradient_minibatch_size:
   # rl training
-  number_envs: 1
   max_ep_len: 100
-  epochs: 800
-  steps_per_epoch: 256
-  save_freq: 100
-  test_freq: 5
+  epochs: 2000
+  steps_per_epoch: 192
+  save_freq: 50
+  test_freq: 2
   output_dir:
   loading_path:
   ## LoRA
   use_cache: true
   use_lora: false
-  lora_r: 16
+  lora_r: 8
   lora_alpha: 32
   # wandb
   wandb_init: false
   wandb_project:
   wandb_name:
+  # macEnv
+  number_envs: 2
+  ue_num: [2, 3]
+
   test: false
 
-macEnv_args:
-  rho: 1.5
-  recent_k: 0
-  UE_num:
-  UE_txbuff_len: 20
-  p_SDU_arrival: 0.5
-  tbl_error_rate: 1e-3
-  TTLs: 24
-  UCM: None
-  DCM: None
-  need_comm: true
-  env_name: 'MacPro_Env'
-
-macEnv_test_args:
-  rho: 1.5
-  recent_k: 0
-  UE_num:
-  UE_txbuff_len: 20
-  p_SDU_arrival: 0.5
-  tbl_error_rate: 1e-3
-  TTLs: 24
-  UCM: None
-  DCM: None
-  need_comm: true
-  env_name: 'MacPro_Env_Test'
-  test_num: 5
+rl_script_args_test:
+  # rl training
+  output_dir:
+  loading_path:
+  ## LoRA
+  use_cache: true
+  use_lora: false
+  lora_r: 8
+  lora_alpha: 32
+  # wandb
+  wandb_init: false
+  wandb_project:
+  wandb_name:
+  # macEnv
+  number_envs: 2
+  ue_num: [2, 3]
   seed: 1113
+
+
+  test: true
+  test_num: 5
+
+# macEnv_args:
+#   rho: 1.5
+#   recent_k: 0
+#   UE_num:
+#   UE_txbuff_len: 20
+#   p_SDU_arrival: 0.5
+#   tbl_error_rate: 1e-3
+#   TTLs: 24
+#   UCM: None
+#   DCM: None
+#   need_comm: true
+#   env_name: 'MacPro_Env'
+
+# macEnv_test_args:
+#   rho: 1.5
+#   recent_k: 0
+#   UE_num:
+#   UE_txbuff_len: 20
+#   p_SDU_arrival: 0.5
+#   tbl_error_rate: 1e-3
+#   TTLs: 24
+#   UCM: None
+#   DCM: None
+#   need_comm: true
+#   env_name: 'MacPro_Env_Test'
+#   test_num: 5
+#   seed: 1113

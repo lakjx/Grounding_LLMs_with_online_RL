@@ -21,8 +21,8 @@ def multi_worker(conn, envs):
             for env, a, stopped in zip(envs, data[0], data[1]):
                 if not stopped:
                     obs, reward, done, info = env.step(a)
-                    if done:
-                        obs, info = env.reset()
+                    # if done:
+                    #     obs, info = env.reset()
                     ret.append((obs, reward, done, info))
                 else:
                     ret.append((None, 0, False, None))
@@ -95,12 +95,12 @@ class ParallelEnv(gym.Env):
         self.num_envs = len(self.envs)
         self.device = torch.device("cuda") if torch.cuda.is_available() \
             else torch.device("cpu")
-        self.spec = deepcopy(self.envs[0].unwrapped.spec)
-        self.spec_id = f"ParallelShapedEnv<{self.spec.id}>"
-        self.env_name = self.envs[0].unwrapped.spec.id
-        self.action_space = self.envs[0].action_space
-        # self.env_name = self.envs[0].env_name
-        # self.spec_id = f"ParallelShapedEnv<{self.env_name}>"
+        # self.spec = deepcopy(self.envs[0].unwrapped.spec)
+        # self.spec_id = f"ParallelShapedEnv<{self.spec.id}>"
+        # self.env_name = self.envs[0].unwrapped.spec.id
+        # self.action_space = self.envs[0].action_space
+        self.env_name = self.envs[0].env_name
+        self.spec_id = f"ParallelShapedEnv<{self.env_name}>"
         if "BabyAI" in self.env_name:
             self.envs_per_proc = 64
         elif "BabyPANDA" in self.env_name:
@@ -211,13 +211,13 @@ class ParallelEnv(gym.Env):
                            to shape the reward.
         """
         # Make sure input is numpy array
-        if type(actions) != np.ndarray:
-            if type(actions) == list or type(actions) == int:
-                actions = np.array(actions)
-            elif type(actions) == torch.Tensor:
-                actions = actions.cpu().numpy()
-            else:
-                raise TypeError
+        # if type(actions) != np.ndarray:
+        #     if type(actions) == list or type(actions) == int:
+        #         actions = np.array(actions)
+        #     elif type(actions) == torch.Tensor:
+        #         actions = actions.cpu().numpy()
+        #     else:
+        #         raise TypeError
         actions_to_take = actions.copy()
 
         # Make a step in the environment
