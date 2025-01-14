@@ -55,7 +55,7 @@ rl_script_args:
   loading_path:
   ## LoRA
   use_cache: true
-  use_lora: true
+  use_lora: false
   lora_r: 16
   lora_alpha: 32
   # wandb
