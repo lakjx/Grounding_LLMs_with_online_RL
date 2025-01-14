@@ -16,13 +16,13 @@ TEST_MODE=false
 CONFIG_PATH="/home/trx/workplace/Grounding_LLMs_with_online_RL/lamorel0/examples/PPO_finetuning/"
 CONFIG_NAME="local_gpu_config"
 RL_SCRIPT_PATH="/home/trx/workplace/Grounding_LLMs_with_online_RL/lamorel0/examples/PPO_finetuning/mac_main.py"
-OUTPUT_DIR="/home/trx/workplace/trx/output_ue5_t5_large"
+OUTPUT_DIR="/home/trx/workplace/trx/outputtest"
 
-UE_NUM=5
+UE_NUM=2
 SEED=1113
 WANDB_INIT=true
 WANDB_PROJECT="LLM_PPO_MacEnv"
-WANDB_NAME="UE_${UE_NUM}_large"
+WANDB_NAME="UE_${UE_NUM}_test"
 
 # LOAD_PATH="/home/trx/workplace/trx/output_ue5_t5_base/epochs_50-100"
 # 执行 Python 脚本

@@ -42,7 +42,7 @@ rl_script_args:
   max_grad_norm: 0.5
   minibatch_size: 8
   # llm
-  gradient_batch_size: 4
+  gradient_batch_size: 1
   gradient_minibatch_size:
   # rl training
   number_envs: 1
@@ -55,7 +55,7 @@ rl_script_args:
   loading_path:
   ## LoRA
   use_cache: true
-  use_lora: true
+  use_lora: false
   lora_r: 16
   lora_alpha: 32
   # wandb
