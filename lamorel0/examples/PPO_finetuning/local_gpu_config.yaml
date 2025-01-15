@@ -13,8 +13,8 @@ lamorel_args:
   llm_args:
     model_type: seq2seq
     # model_type: causal
-    model_path: /home/trx/workplace/trx/t5-small
-    # model_path: /home/trx/workplace/trx/t5-large/Wojtek/flan-t5-large
+    # model_path: /home/trx/workplace/trx/t5-small
+    model_path: /home/trx/workplace/trx/t5-large/Wojtek/flan-t5-large
     # model_path: /home/trx/workplace/trx/t5-base/zimuwangnlp/flan-t5-base
     # model_path: /home/trx/workplace/trx/t5-xl/yiqunchen/flan-t5-xl
     # model_path: /home/trx/workplace/trx/gpt2
@@ -42,21 +42,21 @@ rl_script_args:
   max_grad_norm: 0.5
   minibatch_size: 8
   # llm
-  gradient_batch_size: 4
+  gradient_batch_size: 1
   gradient_minibatch_size:
   # rl training
   number_envs: 1
   max_ep_len: 100
-  epochs: 800
+  epochs: 1000
   steps_per_epoch: 256
-  save_freq: 100
+  save_freq: 50
   test_freq: 5
   output_dir:
   loading_path:
   ## LoRA
   use_cache: true
   use_lora: true
-  lora_r: 16
+  lora_r: 8
   lora_alpha: 32
   # wandb
   wandb_init: false
