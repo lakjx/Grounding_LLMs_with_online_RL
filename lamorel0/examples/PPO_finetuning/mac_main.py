@@ -662,6 +662,7 @@ def test_Env(config_args,llm_md = None):
                 (o, infos), ep_ret, ep_len = envs.reset(), \
                     [0 for _ in range(config_args.rl_script_args_test.number_envs)], \
                     [0 for _ in range(config_args.rl_script_args_test.number_envs)]
+                break
     
     # 计算测试结果
     avg_ep_ret = [np.mean(test_history[f"env{i}"]["ep_ret"]) for i in range(config_args.rl_script_args_test.number_envs)]
