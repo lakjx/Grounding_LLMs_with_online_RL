@@ -7,7 +7,7 @@ export RANK=1
 export LOCAL_RANK=1
 export MASTER_ADDR=127.0.0.1
 export MASTER_PORT=370
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=0
 export NCCL_P2P_DISABLE=1
 export NCCL_IB_DISABLE=1
 
@@ -16,14 +16,14 @@ TEST_MODE=false
 CONFIG_PATH="/home/trx/workplace/Grounding_LLMs_with_online_RL/lamorel0/examples/PPO_finetuning/"
 CONFIG_NAME="local_gpu_config"
 RL_SCRIPT_PATH="/home/trx/workplace/Grounding_LLMs_with_online_RL/lamorel0/examples/PPO_finetuning/mac_main.py"
-OUTPUT_DIR="/home/trx/workplace/trx/hybridEnv_base"
+OUTPUT_DIR="/home/trx/workplace/trx/hybridEnv_large_2345"
 
 # UE_NUM=2
-SEED=3
+SEED=4
 WANDB_INIT=true
 WANDB_PROJECT="LLM_PPO_MacEnv"
-WANDB_NAME="hybridEnv_base"
-
+WANDB_NAME="hybridEnv_large_2345"
+USE_LORA=true
 # LOAD_PATH="/home/trx/workplace/trx/output_ue5_t5_base/epochs_50-100"
 # 执行 Python 脚本
 python -m lamorel_launcher.launch \
@@ -36,6 +36,7 @@ python -m lamorel_launcher.launch \
     "rl_script_args.wandb_project=$WANDB_PROJECT" \
     "rl_script_args.wandb_name=$WANDB_NAME" \
     "rl_script_args.seed=$SEED" \
+    "rl_script_args.use_lora=$USE_LORA"
     # "macEnv_test_args.UE_num=$UE_NUM" \
     # "rl_script_args.loading_path=$LOAD_PATH" \
 

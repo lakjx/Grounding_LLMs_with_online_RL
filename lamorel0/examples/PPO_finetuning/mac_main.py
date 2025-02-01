@@ -289,13 +289,14 @@ class PPOUpdater(BaseUpdater):
                     # scores = torch.stack([_o['score'] for _o in output]).squeeze()
                     # probas = torch.distributions.Categorical(logits=scores)
                     # values = torch.stack([_o["value"][0] for _o in output]).squeeze()
-                    scores = scores_stacking([_o['score'] for _o in output]).reshape(self._gradient_batch_size, 2*kwargs["num_UE"], -1)
+                    scores = scores_stacking([_o['score'] for _o in output]).reshape(self._gradient_batch_size, 2*kwargs["num_UE"][step], -1)
                     probas = torch.distributions.Categorical(logits=scores)                   
-                    values = torch.stack([_o["value"][0] for _o in output]).reshape(self._gradient_batch_size, 2*kwargs["num_UE"], -1).mean(1).squeeze()
+                    values = torch.stack([_o["value"][0] for _o in output]).reshape(self._gradient_batch_size, 2*kwargs["num_UE"][step], -1).mean(1).squeeze()
                     # Compute policy loss
                     entropy = probas.entropy().mean()
                     # log_prob = torch.mean(probas.log_prob(current_process_buffer['actions'][_start_idx:_stop_idx])).unsqueeze(0) # Use logprobs from dist as they were normalized
-                    log_prob = probas.log_prob(current_process_buffer['actions'][_start_idx:_stop_idx]).mean(1)
+                    actions_to_process = current_process_buffer['actions'][_start_idx:_stop_idx]
+                    log_prob = probas.log_prob(actions_to_process[~torch.isnan(actions_to_process)].reshape(1, -1)).mean(1)
                     ratio = torch.exp(log_prob - current_process_buffer['logprobs'][_start_idx:_stop_idx])
                     # assert not (i == 0 and step == 0 and (torch.any(ratio < 0.99) or torch.any(ratio > 1.1)))
                     if i == 0 and step == 0 and (torch.any(ratio < 0.99) or torch.any(ratio > 1.1)):
@@ -523,49 +524,56 @@ def main(config_args):
             if config_args.rl_script_args.loading_path is not None else ""
         # Stack trajectories for all envs
         # TODO: Randomize and mix up environments' trajectories
-        # trajectories = [buf.get() for buf in buffers]
+        trajectories = [buf.get() for buf in buffers]
         # collected_trajectories = {
         #     k: torch.cat([traj[k] for traj in trajectories]) if isinstance(trajectories[0][k], torch.Tensor)
         #     else list(f.reduce(add, [traj[k] for traj in trajectories]))
         #     for k, _ in trajectories[0].items()
         # }
-        for env_id, buf in enumerate(buffers):
-            trajectories = [buf.get()]
-            collected_trajectories = {
-            k: torch.cat([traj[k] for traj in trajectories]) if isinstance(trajectories[0][k], torch.Tensor)
-            else list(f.reduce(add, [traj[k] for traj in trajectories]))
-            for k, _ in trajectories[0].items()
-            }
+        collected_trajectories = {}
+        for k,_ in trajectories[0].items():
+            if isinstance(trajectories[0][k], torch.Tensor) and k != 'act':
+                collected_trajectories[k] = torch.cat([traj[k] for traj in trajectories])
+            elif k == 'act':
+                nan_padded = torch.full((config_args.rl_script_args.steps_per_epoch // config_args.rl_script_args.number_envs, 2), float('nan'))
+                tra_ls = []
+                for _ii,traj in enumerate(trajectories):
+                    if _ii == config_args.rl_script_args.number_envs-1:
+                        tra_ls.append(traj[k])
+                    else:
+                        tra_ls.append(torch.cat([traj[k],nan_padded.repeat(1,config_args.rl_script_args.number_envs-1-_ii)],dim=1))
+                collected_trajectories[k] = torch.cat(tra_ls)
+            else:
+                collected_trajectories[k] = list(f.reduce(add, [traj[k] for traj in trajectories]))
 
-            update_results = lm_server.update(collected_trajectories['obs'],
-                                            collected_trajectories['possible_act'],
-                                            actions=collected_trajectories['act'],
-                                            returns=collected_trajectories['ret'],
-                                            advantages=collected_trajectories['adv'],
-                                            logprobs=collected_trajectories['logp'],
-                                            values=collected_trajectories['val'],
-                                            lr=config_args.rl_script_args.lr,
-                                            clip_eps=config_args.rl_script_args.clip_eps,
-                                            entropy_coef=config_args.rl_script_args.entropy_coef,
-                                            value_loss_coef=config_args.rl_script_args.value_loss_coef,
-                                            max_grad_norm=config_args.rl_script_args.max_grad_norm,
-                                            ppo_epochs=config_args.rl_script_args.ppo_epochs,
-                                            save_after_update=save_model_and_history,
-                                            output_dir=saving_path,
-                                            loading_path=loading_path,
-                                            num_UE = config_args.rl_script_args.ue_num[env_id],
-                                            )
+        update_results = lm_server.update(collected_trajectories['obs'],
+                                        collected_trajectories['possible_act'],
+                                        actions=collected_trajectories['act'],
+                                        returns=collected_trajectories['ret'],
+                                        advantages=collected_trajectories['adv'],
+                                        logprobs=collected_trajectories['logp'],
+                                        values=collected_trajectories['val'],
+                                        lr=config_args.rl_script_args.lr,
+                                        clip_eps=config_args.rl_script_args.clip_eps,
+                                        entropy_coef=config_args.rl_script_args.entropy_coef,
+                                        value_loss_coef=config_args.rl_script_args.value_loss_coef,
+                                        max_grad_norm=config_args.rl_script_args.max_grad_norm,
+                                        ppo_epochs=config_args.rl_script_args.ppo_epochs,
+                                        save_after_update=save_model_and_history,
+                                        output_dir=saving_path,
+                                        loading_path=loading_path,
+                                        num_UE = config_args.rl_script_args.ue_num,
+                                        )
 
-            avg_loss = np.mean([_r['loss'] for _r in update_results])
-            avg_policy_loss = np.mean([_r['policy_loss'] for _r in update_results])
-            avg_value_loss = np.mean([_r['value_loss'] for _r in update_results])
-            print(f"Update loss for env {env_id}: {avg_loss}")
-
-            if config_args.rl_script_args.wandb_init:
-                wandb.log({
-                    f"train_policy_loss/env{env_id}": avg_policy_loss,
-                    f"train_value_loss/env{env_id}": avg_value_loss,
-                    })
+        avg_loss = np.mean([_r['loss'] for _r in update_results])
+        avg_policy_loss = np.mean([_r['policy_loss'] for _r in update_results])
+        avg_value_loss = np.mean([_r['value_loss'] for _r in update_results])
+        
+        if config_args.rl_script_args.wandb_init:
+            wandb.log({
+                f"train_policy_loss": avg_policy_loss,
+                f"train_value_loss": avg_value_loss,
+                })
 
 
 def test_Env(config_args,llm_md = None):

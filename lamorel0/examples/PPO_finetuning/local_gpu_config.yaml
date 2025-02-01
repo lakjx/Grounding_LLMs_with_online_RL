@@ -14,8 +14,8 @@ lamorel_args:
     model_type: seq2seq
     # model_type: causal
     # model_path: /home/trx/workplace/trx/t5-small
-    # model_path: /home/trx/workplace/trx/t5-large/Wojtek/flan-t5-large
-    model_path: /home/trx/workplace/trx/t5-base/zimuwangnlp/flan-t5-base
+    model_path: /home/trx/workplace/trx/t5-large/Wojtek/flan-t5-large
+    # model_path: /home/trx/workplace/trx/t5-base/zimuwangnlp/flan-t5-base
     # model_path: /home/trx/workplace/trx/t5-xl/yiqunchen/flan-t5-xl
     # model_path: /home/trx/workplace/trx/gpt2
     # model_path: /home/trx/workplace/trx/Llama-3.2-1B
@@ -40,14 +40,14 @@ rl_script_args:
   value_loss_coef: 0.5
   clip_eps: 0.2
   max_grad_norm: 0.5
-  minibatch_size: 8
+  minibatch_size: 128
   # llm
   gradient_batch_size: 1
   gradient_minibatch_size:
   # rl training
   max_ep_len: 100
   epochs: 2000
-  steps_per_epoch: 192
+  steps_per_epoch: 512
   save_freq: 50
   test_freq: 2
   output_dir:
@@ -62,8 +62,8 @@ rl_script_args:
   wandb_project:
   wandb_name:
   # macEnv
-  number_envs: 2
-  ue_num: [2, 3]
+  number_envs: 4
+  ue_num: [2,3,4,5]
 
   test: false
 
@@ -81,8 +81,8 @@ rl_script_args_test:
   wandb_project:
   wandb_name:
   # macEnv
-  number_envs: 2
-  ue_num: [2, 3]
+  number_envs: 4
+  ue_num: [2,3,4,5]
   seed: 1113
 
 
