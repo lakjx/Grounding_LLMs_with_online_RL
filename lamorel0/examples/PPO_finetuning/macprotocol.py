@@ -187,14 +187,12 @@ class MacProtocolEnv():
             if agent == 'BS':
                 bs_obs = self.get_bs_internal_stat()
                 obs_n.append(bs_obs)
-                # info_n["BS_des"] = self.BS_Prompt(bs_obs)
-                info_n["BS_des"] = str(bs_obs)
+                info_n["BS_des"] = self.BS_Prompt(bs_obs)
             else:
                 tar_ue_idx = int(agent.split('_')[1])
                 ue_obs = self.get_ue_internal_stat(tar_ue_idx)
                 obs_n.append(ue_obs)
-                # info_n["UE{}_des".format(tar_ue_idx)] = self.UE_Prompt(tar_ue_idx,ue_obs)
-                info_n["UE{}_des".format(tar_ue_idx)] = str(ue_obs)
+                info_n["UE{}_des".format(tar_ue_idx)] = self.UE_Prompt(tar_ue_idx,ue_obs)
         info_n["num_UE"] = self.UE_num
         return obs_n, info_n
 
@@ -262,14 +260,12 @@ class MacProtocolEnv():
             if agent == 'BS':
                 bs_obs = self.get_bs_internal_stat()
                 obs_n.append(bs_obs)
-                # info_n["BS_des"] = self.BS_Prompt(bs_obs)
-                info_n["BS_des"] = str(bs_obs)
+                info_n["BS_des"] = self.BS_Prompt(bs_obs)
             else:
                 tar_ue_idx = int(agent.split('_')[1])
                 ue_obs = self.get_ue_internal_stat(tar_ue_idx)
                 obs_n.append(ue_obs)
-                # info_n["UE{}_des".format(tar_ue_idx)] = self.UE_Prompt(tar_ue_idx,ue_obs)
-                info_n["UE{}_des".format(tar_ue_idx)] = str(ue_obs)
+                info_n["UE{}_des".format(tar_ue_idx)] = self.UE_Prompt(tar_ue_idx,ue_obs)
             # reward_n.append(self.get_rwd())
             # done_n.append(self.done)
         info_n["num_UE"] = self.UE_num
@@ -292,7 +288,8 @@ class MacProtocolEnv():
         act_candidate = "Action candidates: nothing, transmit, delete."
         
         ue_signal_candidate = "Signaling candidates: " + ", ".join(uplink_signal_mapping.values()) + "."
-        prompt = "\n".join([identify,goal,obs,act_candidate,ue_signal_candidate]) + "\nAction and signaling:"
+        # prompt = "\n".join([identify,goal,obs,act_candidate,ue_signal_candidate]) + "\nAction and signaling:"
+        prompt = str(observ) + "\nAction and signaling:"
         return prompt
     def BS_Prompt(self,observ):
         ucm_msg = observ[1:1+self.UE_num]
@@ -318,10 +315,12 @@ class MacProtocolEnv():
             ucmdcm_stat += f"For {i}-th UE, you receive {uplink_signal_mapping.get(ucm_msg[i])} and send {downlink_signal_mapping.get(dcm_msg[i])} last time, "
 
         bs_signal_candidate = "Signaling candidates: "+ ", ".join(downlink_signal_mapping.values()) + "."
-        obs = f"Observations: {channel_stat} {ucmdcm_stat}"
+        # obs = f"Observations: {channel_stat} {ucmdcm_stat}"
+        obs_str = str(observ)
         prompt = []
         for i in range(self.UE_num):
-            prompt.append("\n".join([identify,goal[i],obs,bs_signal_candidate]) + "\nAction and signaling:")
+            # prompt.append("\n".join([obs]) + "\nAction and signaling:")
+            prompt.append(obs_str+ "\nAction and signaling:")
         return prompt
        
     def get_ue_internal_stat(self,tar_ue_idx):
