@@ -612,7 +612,17 @@ def test_Env(config_args,llm_md = None):
                     custom_updater=PPOUpdater(config_args.lamorel_args.llm_args.model_type,
                                                 config_args.rl_script_args.minibatch_size,
                                                 config_args.rl_script_args.gradient_batch_size),
-                    custom_model_initializer=WeightsLoaderInitializer(config_args.rl_script_args.loading_path),
+                    custom_model_initializer=SequentialInitializer([
+                            PeftInitializer(config_args.lamorel_args.llm_args.model_type,
+                                            config_args.lamorel_args.llm_args.model_path,
+                                            config_args.rl_script_args.use_lora,
+                                            config_args.lamorel_args.llm_args.load_in_4bit,
+                                            config_args.rl_script_args.lora_r,
+                                            config_args.rl_script_args.lora_alpha,
+                                            config_args.rl_script_args.use_cache),
+                            WeightsLoaderInitializer(config_args.rl_script_args.loading_path)
+                        ]),
+                    # WeightsLoaderInitializer(config_args.rl_script_args.loading_path),
                     custom_module_functions={
                         'score': LogScoringModuleFn(config_args.lamorel_args.llm_args.model_type,
                                                     config_args.lamorel_args.llm_args.pre_encode_inputs),
@@ -671,7 +681,18 @@ def test_Env(config_args,llm_md = None):
                     [0 for _ in range(config_args.rl_script_args_test.number_envs)], \
                     [0 for _ in range(config_args.rl_script_args_test.number_envs)]
                 break
-    
+    if config_args.rl_script_args.plot_mode:
+        print('Plotting results...')
+        with open('/home/trx/workplace/Grounding_LLMs_with_online_RL/result_2.dat','w') as f:
+            goodput = [x/24 for x in test_history[f"env{0}"]["goodput"]]
+            line = ' '.join(map(str, goodput))
+            f.write(line+'\n')
+            colli_num = [x/24 for x in test_history[f"env{0}"]["colli_num"]]
+            line = ' '.join(map(str, colli_num))
+            f.write(line+'\n')
+            arri_num = [x/24 for x in test_history[f"env{0}"]["arri_num"]]
+            line = ' '.join(map(str, arri_num))
+            f.write(line+'\n')
     # 计算测试结果
     avg_ep_ret = [np.mean(test_history[f"env{i}"]["ep_ret"]) for i in range(config_args.rl_script_args_test.number_envs)]
     avg_Goodput = [np.mean(test_history[f"env{i}"]["goodput"])/24 for i in range(config_args.rl_script_args_test.number_envs)]
