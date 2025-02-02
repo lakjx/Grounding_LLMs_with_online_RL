@@ -17,7 +17,7 @@ WANDB_INIT=false
 CONFIG_PATH="/home/trx/workplace/Grounding_LLMs_with_online_RL/lamorel0/examples/PPO_finetuning/"
 CONFIG_NAME="local_gpu_config"
 RL_SCRIPT_PATH="/home/trx/workplace/Grounding_LLMs_with_online_RL/lamorel0/examples/PPO_finetuning/mac_main.py"
-LOADING_PATH="/home/trx/workplace/trx/hybridEnv_base_2345/continued_epochs_450-500"
+LOADING_PATH="/home/trx/workplace/trx/hybridEnv_base_2345/continued_epochs_450-500" #450-500base seed=5
 PLOT_MODE=true
 USE_LORA=false
 

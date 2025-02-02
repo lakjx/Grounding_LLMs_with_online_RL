@@ -62,10 +62,10 @@ rl_script_args:
   wandb_project:
   wandb_name:
   # macEnv
-  # number_envs: 4
-  # ue_num: [2,3,4,5]
-  number_envs: 1
-  ue_num: [3]
+  number_envs: 4
+  ue_num: [2,3,4,5]
+  # number_envs: 1
+  # ue_num: [3]
   plot_mode: false
   test: false
 
@@ -83,15 +83,15 @@ rl_script_args_test:
   wandb_project:
   wandb_name:
   # macEnv
-  # number_envs: 4
-  # ue_num: [2,3,4,5]
-  number_envs: 1
-  ue_num: [3]
+  number_envs: 4
+  ue_num: [2,3,4,5]
+  # number_envs: 1
+  # ue_num: [3]
   seed: 5
 
 
   test: true
-  test_num: 10
+  test_num: 5
 
 # macEnv_args:
 #   rho: 1.5

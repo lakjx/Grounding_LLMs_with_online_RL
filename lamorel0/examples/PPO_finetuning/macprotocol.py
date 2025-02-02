@@ -187,12 +187,14 @@ class MacProtocolEnv():
             if agent == 'BS':
                 bs_obs = self.get_bs_internal_stat()
                 obs_n.append(bs_obs)
-                info_n["BS_des"] = self.BS_Prompt(bs_obs)
+                # info_n["BS_des"] = self.BS_Prompt(bs_obs)
+                info_n["BS_des"] = str(bs_obs)
             else:
                 tar_ue_idx = int(agent.split('_')[1])
                 ue_obs = self.get_ue_internal_stat(tar_ue_idx)
                 obs_n.append(ue_obs)
-                info_n["UE{}_des".format(tar_ue_idx)] = self.UE_Prompt(tar_ue_idx,ue_obs)
+                # info_n["UE{}_des".format(tar_ue_idx)] = self.UE_Prompt(tar_ue_idx,ue_obs)
+                info_n["UE{}_des".format(tar_ue_idx)] = str(ue_obs)
         info_n["num_UE"] = self.UE_num
         return obs_n, info_n
 
@@ -260,12 +262,14 @@ class MacProtocolEnv():
             if agent == 'BS':
                 bs_obs = self.get_bs_internal_stat()
                 obs_n.append(bs_obs)
-                info_n["BS_des"] = self.BS_Prompt(bs_obs)
+                # info_n["BS_des"] = self.BS_Prompt(bs_obs)
+                info_n["BS_des"] = str(bs_obs)
             else:
                 tar_ue_idx = int(agent.split('_')[1])
                 ue_obs = self.get_ue_internal_stat(tar_ue_idx)
                 obs_n.append(ue_obs)
-                info_n["UE{}_des".format(tar_ue_idx)] = self.UE_Prompt(tar_ue_idx,ue_obs)
+                # info_n["UE{}_des".format(tar_ue_idx)] = self.UE_Prompt(tar_ue_idx,ue_obs)
+                info_n["UE{}_des".format(tar_ue_idx)] = str(ue_obs)
             # reward_n.append(self.get_rwd())
             # done_n.append(self.done)
         info_n["num_UE"] = self.UE_num
